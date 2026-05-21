@@ -12,6 +12,7 @@
       --glass-border:rgba(255,255,255,0.08); --radius:14px;
       --glass-blur:10px; --text:#e6f7ff; --muted:#9fb7c9;
       --gold: #ffd700; --silver: #c0c0c0; --bronze: #cd7f32;
+      --live: #4ade80;
     }
     *{box-sizing:border-box;margin:0;padding:0}
     html,body{height:100%;font-family:"Noto Sans JP",sans-serif;background:linear-gradient(135deg,var(--bg1),var(--bg2));color:var(--text);-webkit-font-smoothing:antialiased}
@@ -42,6 +43,19 @@
     .tagline{font-size:14px;color:var(--accent);display:flex;align-items:center;gap:8px;margin-top:4px}
     .spark{width:8px;height:8px;border-radius:50%;background:#00d4ff;box-shadow:0 0 10px #00d4ff;animation:pulse 2s infinite}
     @keyframes pulse{0%,100%{transform:scale(0.8);opacity:0.5}50%{transform:scale(1.2);opacity:1}}
+
+    /* 同時接続バッジ */
+    .live-count-wrap {
+      display: flex; align-items: center; gap: 8px;
+      background: rgba(74, 222, 128, 0.1); color: var(--live);
+      padding: 6px 12px; border-radius: 20px; border: 1px solid rgba(74, 222, 128, 0.2);
+      font-size: 13px; font-weight: 700;
+    }
+    .live-dot {
+      width: 8px; height: 8px; background: var(--live); border-radius: 50%;
+      box-shadow: 0 0 10px var(--live); animation: blink 1.5s infinite;
+    }
+    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 
     /* ツールバー */
     .toolbar{display:flex;flex-direction:column;gap:12px}
@@ -89,7 +103,6 @@
     .rank-3 .rank-tag{display:flex; background:linear-gradient(to bottom, #f3ad8a, var(--bronze)); color:#522a15;}
     
     .rank-1 { border-color: rgba(255, 215, 0, 0.4); }
-    .rank-1::after { content:'TOP'; position:absolute; top:45px; left:10px; font-size:9px; color:var(--gold); font-weight:bold; letter-spacing:1px; }
 
     .thumb{position:relative;height:145px;background:rgba(0,0,0,0.2);display:flex;align-items:center;justify-content:center;overflow:hidden}
     .thumb img{width:100%;height:100%;object-fit:cover}
@@ -137,6 +150,11 @@
           <div class="tagline"><div class="spark"></div>リアルタイム・人気ランキング</div>
         </div>
       </div>
+      <!-- 同時接続数表示 -->
+      <div class="live-count-wrap" title="現在このページを見ているユーザー数">
+        <div class="live-dot"></div>
+        LIVE: <span id="onlineCount">1</span> users
+      </div>
     </header>
 
     <div class="toolbar inner">
@@ -181,10 +199,10 @@
     let allGames = [];
     let gameStats = {}; 
     let activeGenre = 'all';
-    let activeSort = 'popular'; // 初期状態は人気順
+    let activeSort = 'popular';
     let activeSearch = '';
 
-    // ── 2. UUID取得（1分制限用） ──
+    // UUID取得
     const getClientId = () => {
       let id = localStorage.getItem('min_tube_uid');
       if(!id) { id = crypto.randomUUID(); localStorage.setItem('min_tube_uid', id); }
@@ -192,8 +210,8 @@
     };
     const uid = getClientId();
 
-    // ── 3. データ取得 ──
-    async function loadData() {
+    // ── 2. データ取得 & リアルタイム設定 ──
+    async function init() {
       try {
         const res = await fetch('games.json');
         allGames = await res.json();
@@ -204,30 +222,46 @@
 
         render();
         setupRealtime();
+        setupPresence(); // 同時接続数監視
       } catch (e) {
-        console.error("Load failed:", e);
-        $('countBar').innerText = "データのロードに失敗しました。";
+        console.error(e);
       }
     }
 
-    // ── 4. リアルタイム更新（他人のプレイを即反映） ──
+    // ランキング数値のリアルタイム監視
     function setupRealtime() {
       supabaseClient
-        .channel('schema-db-changes')
+        .channel('db_changes')
         .on('postgres_changes', { event: '*', table: 'game_rankings' }, payload => {
           const { game_key, play_count } = payload.new;
           gameStats[game_key] = parseInt(play_count);
-          
-          // 表示バッジのみ更新（DOM再構築は重いためデバウンス）
           const badge = $(`count-${game_key}`);
           if(badge) badge.innerText = `${play_count} plays`;
-          
           if(activeSort === 'popular') debounceRender();
         })
         .subscribe();
     }
 
-    // ── 5. プレイ処理（RPCで1分制限をサーバーサイドチェック） ──
+    // ── 3. 同時接続数 (Presence) ──
+    function setupPresence() {
+      const channel = supabaseClient.channel('online-users', {
+        config: { presence: { key: uid } }
+      });
+
+      channel
+        .on('presence', { event: 'sync' }, () => {
+          const state = channel.presenceState();
+          const count = Object.keys(state).length; // ユニークなUUIDの数
+          $('onlineCount').innerText = count;
+        })
+        .subscribe(async (status) => {
+          if (status === 'SUBSCRIBED') {
+            await channel.track({ online_at: new Date().toISOString() });
+          }
+        });
+    }
+
+    // ── 4. プレイ処理 ──
     async function play(key) {
       await supabaseClient.rpc('increment_game_play', { 
         target_game_key: key, 
@@ -236,29 +270,26 @@
       window.location.href = `play.html?game=${key}`;
     }
 
-    // ── 6. メイン描画（ソート & ランキング演出） ──
+    // ── 5. メイン描画 ──
     function render() {
       const grid = $('gameGrid');
       const query = activeSearch.toLowerCase();
 
       let filtered = allGames.filter(g => {
         const matchGenre = activeGenre === 'all' || g.genre === activeGenre;
-        const matchSearch = g.name.toLowerCase().includes(query) || 
-                           (g.tags && g.tags.some(t => t.toLowerCase().includes(query)));
+        const matchSearch = g.name.toLowerCase().includes(query) || (g.tags && g.tags.some(t => t.toLowerCase().includes(query)));
         return matchGenre && matchSearch;
       });
 
-      // 【重要】ソートロジック：人気順 -> 同率は A-Z順
       filtered.sort((a, b) => {
         if(activeSort === 'popular') {
           const countA = gameStats[a.key] || 0;
           const countB = gameStats[b.key] || 0;
           if (countB !== countA) return countB - countA;
-          // 同率ならA-Z順
           return a.name.localeCompare(b.name, 'ja', {numeric: true});
         }
         if(activeSort === 'name-asc') return a.name.localeCompare(b.name, 'ja', {numeric: true});
-        return b.name.localeCompare(a.name, 'ja', {numeric: true});
+        return b.name.localeCompare(na,'ja', {numeric: true});
       });
 
       grid.innerHTML = '';
@@ -266,7 +297,6 @@
         const count = gameStats[g.key] || 0;
         const card = document.createElement('article');
         
-        // 1-3位の演出用クラス（フィルタリング中も上位は目立たせる）
         let rankClass = '';
         let medal = '';
         if (activeSort === 'popular') {
@@ -301,7 +331,7 @@
       $('countBar').innerHTML = `<span>${filtered.length}</span> 件のゲーム`;
     }
 
-    // ── 7. イベント制御 ──
+    // ── 6. イベント制御 ──
     let timer;
     const debounceRender = () => { clearTimeout(timer); timer = setTimeout(render, 1000); };
 
@@ -320,7 +350,7 @@
     $('btnGrid').onclick = () => { $('gameGrid').classList.remove('list-view'); $('btnGrid').classList.add('active'); $('btnList').classList.remove('active'); };
     $('btnList').onclick = () => { $('gameGrid').classList.add('list-view'); $('btnList').classList.add('active'); $('btnGrid').classList.remove('active'); };
 
-    loadData();
+    init();
   </script>
 </body>
 </html>
