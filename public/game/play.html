@@ -4,6 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>プレイ中 — MIN-Tube-Pro Games</title>
+  <!-- Supabase SDK 追加 -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     :root {
       --bg: linear-gradient(135deg, #0f1724, #071029);
@@ -12,6 +14,7 @@
       --border: rgba(255, 255, 255, 0.08);
       --muted: #9fb7c9;
       --text: #e6f7ff;
+      --live: #4ade80;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -20,7 +23,6 @@
     }
     .layout { display: flex; flex-direction: column; height: 100%; position: relative; }
     
-    /* 上部バーの調整：絶対配置にして隠せるように */
     .topbar {
       position: absolute; top: 0; left: 0; right: 0;
       display: flex; align-items: center; gap: 12px; padding: 10px 18px;
@@ -28,9 +30,7 @@
       backdrop-filter: blur(10px); z-index: 100;
       transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     }
-    /* 隠す状態 */
     .hide-ui .topbar { transform: translateY(-100%); }
-    .hide-ui .side-toggle { opacity: 0; transform: translate(100%, -50%); }
 
     .back-btn, .action-btn, .panel-close {
       display: inline-flex; align-items: center; gap: 6px; color: var(--muted);
@@ -42,13 +42,14 @@
     .game-info { flex: 1; display: flex; align-items: center; gap: 10px; min-width: 0; }
     .game-name { font-weight: 700; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     
+    /* LIVEバッジの装飾 */
     .live-badge {
-      display: flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 20px;
-      background: rgba(34,197,94,0.1); border: 1px solid rgba(34,197,94,0.25);
-      color: #4ade80; font-size: 12px; font-weight: 600;
+      display: flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 20px;
+      background: rgba(74, 222, 128, 0.1); border: 1px solid rgba(74, 222, 128, 0.2);
+      color: var(--live); font-size: 12px; font-weight: 700;
     }
-    .live-dot { width: 7px; height: 7px; border-radius: 50%; background: #22c55e; position: relative; }
-    .live-dot::after { content: ''; position: absolute; inset: 0; border-radius: 50%; background: #22c55e; animation: ping 2s infinite; }
+    .live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--live); position: relative; box-shadow: 0 0 10px var(--live); }
+    .live-dot::after { content: ''; position: absolute; inset: 0; border-radius: 50%; background: var(--live); animation: ping 2s infinite; }
     @keyframes ping { 0% { transform: scale(1); opacity: 0.6 } 70%,100% { transform: scale(2.4); opacity: 0 } }
 
     .frame-wrap { flex: 1; position: relative; background: #000; width: 100%; height: 100%; }
@@ -61,6 +62,7 @@
     .hidden { opacity: 0; pointer-events: none; }
     .spinner { width: 40px; height: 40px; border: 3px solid rgba(0,212,255,.1); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg) } }
+    
     .error-screen { display: none; text-align: center; padding: 20px; }
     .error-screen.show { display: flex; }
     .retry-btn { padding: 10px 22px; border-radius: 10px; border: none; font-weight: 600; background: linear-gradient(135deg, var(--accent), #6a00ff); color: #fff; cursor: pointer; }
@@ -100,7 +102,13 @@
           <div class="game-sub" style="font-size:11px;color:var(--muted)">MIN-Tube-Pro Games</div>
         </div>
       </div>
-      <div class="live-badge" id="liveBadge" style="display:none"><div class="live-dot"></div><span>プレイ中</span></div>
+
+      <!-- 同時接続数表示エリア -->
+      <div class="live-badge" id="liveBadge">
+        <div class="live-dot"></div>
+        <span id="onlineCount">1</span> users
+      </div>
+
       <button class="action-btn" id="reloadBtn"><svg viewBox="0 0 24 24"><path d="M23 4v6h-6M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>リロード</button>
       <button class="action-btn" id="fsBtn"><svg viewBox="0 0 24 24" id="fsIcon"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>全画面</button>
     </header>
@@ -126,22 +134,53 @@
   </aside>
 
   <script>
+    // ── 1. Supabase設定（一覧画面と同じもの） ──
+    const SUPABASE_URL = 'https://vddbnttozxrvhjyzqgps.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZkZGJudHRvenhydmhqeXpxZ3BzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzMDczMjgsImV4cCI6MjA5NDg4MzMyOH0.XgN7PLFpstChezT_uoE06D3I4Yki6zMnKsI245smyPQ';
+    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
     const $ = id => document.getElementById(id);
     const params = new URLSearchParams(location.search);
     const gameKey = params.get('game') || '';
     let currentGame = null;
     let uiTimer;
 
+    // UUID取得（一覧画面と共通にすることで同一ユーザーとしてカウント）
+    const getClientId = () => {
+      let id = localStorage.getItem('min_tube_uid');
+      if(!id) { id = crypto.randomUUID(); localStorage.setItem('min_tube_uid', id); }
+      return id;
+    };
+    const uid = getClientId();
+
     const UI = {
       frame: $('gameFrame'), loading: $('loadingScreen'), error: $('errorScreen'),
       badge: $('liveBadge'), panel: $('sidePanel'), layout: $('layout'), topbar: $('topbar')
     };
 
+    // ── 2. 同時接続数 (Presence) の設定 ──
+    function setupPresence() {
+      const channel = supabaseClient.channel('online-users', {
+        config: { presence: { key: uid } }
+      });
+
+      channel
+        .on('presence', { event: 'sync' }, () => {
+          const state = channel.presenceState();
+          const count = Object.keys(state).length;
+          $('onlineCount').innerText = count;
+        })
+        .subscribe(async (status) => {
+          if (status === 'SUBSCRIBED') {
+            await channel.track({ online_at: new Date().toISOString(), playing: gameKey });
+          }
+        });
+    }
+
     // UIの表示制御
     const showUI = () => {
       UI.layout.classList.remove('hide-ui');
       clearTimeout(uiTimer);
-      // マウスが止まって3秒後に隠す。ただしパネルが開いている時やバーにホバー中は隠さない。
       uiTimer = setTimeout(() => {
         if (!UI.panel.classList.contains('open') && !UI.topbar.matches(':hover')) {
           UI.layout.classList.add('hide-ui');
@@ -170,8 +209,15 @@
           <div><div class="info-label">タグ</div><div>${currentGame.tags.map(t => `<span class="tag">${t}</span>`).join('')}</div></div>
         `;
 
-        UI.frame.onload = () => { UI.loading.classList.add('hidden'); UI.badge.style.display = 'flex'; };
+        UI.frame.onload = () => { 
+          UI.loading.classList.add('hidden'); 
+          UI.badge.style.display = 'flex'; 
+        };
         UI.frame.src = currentGame.file;
+        
+        // Presence開始
+        setupPresence();
+        
       } catch (err) {
         UI.loading.classList.add('hidden');
         UI.error.classList.add('show');
@@ -203,7 +249,7 @@
     $('panelClose').onclick = () => UI.panel.classList.remove('open');
 
     loadGame();
-    showUI(); // 初回表示
+    showUI();
   </script>
 </body>
 </html>
