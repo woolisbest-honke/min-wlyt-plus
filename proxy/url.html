@@ -56,6 +56,33 @@
             color: #6b7280;
             font-size: 0.95rem;
             font-weight: 500;
+            margin-bottom: 1rem;
+        }
+
+        /* 手動サーバー選択 UI */
+        .server-select-container {
+            margin-top: 1.5rem;
+        }
+        
+        .server-select {
+            padding: 0.6rem 1rem;
+            border-radius: 8px;
+            border: 1px solid #e5e7eb;
+            background: #ffffff;
+            font-size: 0.85rem;
+            color: #374151;
+            cursor: pointer;
+            font-weight: 500;
+            width: 100%;
+            max-width: 260px;
+            outline: none;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        
+        .server-select:focus {
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
         }
 
         /* Error UI (White Theme) */
@@ -111,6 +138,12 @@
         <div class="loading-content">
             <h1 class="loading-title">Connecting to server...</h1>
             <p id="loading-status" class="status-text">Locating optimal node...</p>
+            
+            <div class="server-select-container">
+                <select class="server-select">
+                    <option value="auto">自動選択（最適なノード）</option>
+                </select>
+            </div>
         </div>
     </div>
     
@@ -118,6 +151,13 @@
         <div class="error-content">
             <h1>Connection Failed</h1>
             <p id="error-message" class="error-message"></p>
+            
+            <div class="server-select-container">
+                <select class="server-select">
+                    <option value="auto">自動選択（最適なノード）</option>
+                </select>
+            </div>
+
             <div class="url-example">/embed#https://example.com</div>
         </div>
     </div>
@@ -131,23 +171,26 @@
         import * as BareMux from "/prxy/baremux/index.mjs";
 
         const connection = new BareMux.BareMuxConnection("/prxy/baremux/worker.js");
+        
+
         const wispServers = [
-            "wss://wisp.rhw.one/",     
-            "wss://anura.pro/",
-            "wss://phantom.lol/wisp/",
-            "wss://wisp.mercurywork.shop/",  
-            "wss://shadow-3.swanndvr.net/wisp/",
-            "wss://shadow.curesoutpost.com/wisp/",
-            "wss://wisp.43059.lrga.space/",
-            "wss://wisp.lrga.space/",
-            "wss://wisp.artclass-eta.vercel.app",
-            "wss://wisp.gointerstellar.app/",
-            "wss://wisp.webmc.fun/",
-            "wss://construction.services.codd70.ru/socket/",            
-            "wss://tomp.app/wisp/"
+            { url: "wss://wisp.rhw.one/", name: "Rammerhead" },     
+            { url: "wss://anura.pro/", name: "AnuraOS" },
+            { url: "wss://phantom.lol/wisp/", name: "ShadowV3" },
+            { url: "wss://wisp.mercurywork.shop/", name: "UV" },  
+            { url: "wss://shadow-3.swanndvr.net/wisp/", name: "ShadowV3" },
+            { url: "wss://shadow.curesoutpost.com/wisp/", name: "ShadowV3" },
+            { url: "wss://wisp.43059.lrga.space/", name: "WispV3" },
+            { url: "wss://wisp.lrga.space/", name: "WispV3" },
+            { url: "wss://wisp.artclass-eta.vercel.app", name: "Artclass" },
+            { url: "wss://wisp.gointerstellar.app/", name: "WispV3" },
+            { url: "wss://wisp.webmc.fun/", name: "WispV3" },
+            { url: "wss://construction.services.codd70.ru/socket/", name: "WispV3" },            
+            { url: "wss://tomp.app/wisp/", name: "WispV3" }
         ];
 
         let activeWispUrl = null;
+
         async function checkWispServer(url) {
             return new Promise((resolve) => {
                 let resolved = false;
@@ -184,17 +227,25 @@
                 }
             });
         }
+
         async function getAvailableWisp() {
+            // 手動選択されている場合は、自動巡回をスキップしてそのURLを返す
+            const currentSelect = document.querySelector('.server-select');
+            if (currentSelect && currentSelect.value !== 'auto') {
+                return currentSelect.value;
+            }
+
             if (activeWispUrl) return activeWispUrl;
             
             const statusText = document.getElementById('loading-status');
             
-            for (const url of wispServers) {
-                if(statusText) statusText.textContent = `Testing Node: ${new URL(url).hostname}...`;
-                const isWorking = await checkWispServer(url);
+            for (const server of wispServers) {
+                // 接続テスト中の表示も、ホスト名ではなく指定された名称に変更
+                if(statusText) statusText.textContent = `Testing Node: ${server.name}...`;
+                const isWorking = await checkWispServer(server.url);
                 if (isWorking) {
-                    activeWispUrl = url; 
-                    return url;
+                    activeWispUrl = server.url; 
+                    return server.url;
                 }
             }
             throw new Error("No usable nodes are currently available. All connections failed.");
@@ -268,9 +319,35 @@
             }
         }
 
+        function setupServerSelect() {
+            const selects = document.querySelectorAll('.server-select');
+            
+            selects.forEach(select => {
+                wispServers.forEach(server => {
+                    const opt = document.createElement('option');
+                    opt.value = server.url;
+                    opt.textContent = server.name;
+                    select.appendChild(opt);
+                });
+
+                select.addEventListener('change', (e) => {
+                    const targetUrl = e.target.value;
+                    
+                    selects.forEach(s => s.value = targetUrl);
+
+                    document.getElementById('error-container').style.display = 'none';
+                    document.getElementById('loading-container').style.display = 'flex';
+                    document.getElementById('embed-frame').style.display = 'none';
+                    embedUrl();
+                });
+            });
+        }
+
         window.addEventListener('hashchange', embedUrl);
 
         const init = () => {
+            setupServerSelect(); 
+            
             if (typeof __uv$config !== 'undefined') {
                 embedUrl();
             } else {
