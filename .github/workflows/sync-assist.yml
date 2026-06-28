@@ -1,0 +1,49 @@
+name: Sync assist folders (manual only)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout main repo
+        uses: actions/checkout@v4
+
+      - name: Checkout memo repo
+        uses: actions/checkout@v4
+        with:
+          repository: mino-hobby-pro/memo
+          path: memo_repo
+
+      - name: Checkout gisou-min2 repo
+        uses: actions/checkout@v4
+        with:
+          repository: mino-hobby-pro/gisou-min2
+          path: gisou_repo
+
+      - name: Copy memo repo
+        run: |
+          rm -rf assist/memo
+          mkdir -p assist/memo
+          cp -r memo_repo/* assist/memo/
+
+      - name: Copy gisou-min2 repo
+        run: |
+          rm -rf assist/gisou-min2
+          mkdir -p assist/gisou-min2
+          cp -r gisou_repo/* assist/gisou-min2/
+
+      - name: Commit and push changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add .
+          if git diff --cached --quiet; then
+            echo "No changes"
+          else
+            git commit -m "Manual sync: memo & gisou-min2"
+            git push
+          fi
