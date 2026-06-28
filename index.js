@@ -79,12 +79,12 @@ app.use(async (req, res, next) => {
   if (req.path.startsWith("/api") || req.path.startsWith("/video") || req.path === "/") {
     if (!req.cookies || req.cookies.humanVerified !== "true") {
       const pages = [
-        'https://raw.githubusercontent.com/mino-hobby-pro/memo/refs/heads/main/min-tube-pro-main-loading.txt',
-        'https://raw.githubusercontent.com/mino-hobby-pro/memo/refs/heads/main/min-tube-pro-sub-roading-like-command-loader-local.txt',
-        'https://raw.githubusercontent.com/mino-hobby-pro/memo/refs/heads/main/google.txt',
-        'https://raw.githubusercontent.com/mino-hobby-pro/memo/refs/heads/main/history.html.txt',
-        'https://raw.githubusercontent.com/mino-hobby-pro/memo/refs/heads/main/gisou/chapcha.html',
-        'https://raw.githubusercontent.com/mino-hobby-pro/memo/refs/heads/main/gisou/easy.html',
+        'https://raw.githubusercontent.com/woolisbest-honke/min-wlyt-plus/refs/heads/main/assist/memo/min-tube-pro-main-loading.txt',
+        'https://github.com/woolisbest-honke/min-wlyt-plus/blob/main/assist/memo/min-tube-pro-sub-roading-like-command-loader-local.txt',
+        'https://raw.githubusercontent.com/woolisbest-honke/min-wlyt-plus/refs/heads/main/assist/memo/google.txt',
+        'https://raw.githubusercontent.com/woolisbest-honke/min-wlyt-plus/refs/heads/main/assist/memo/history.html.txt',
+        'https://raw.githubusercontent.com/woolisbest-honke/min-wlyt-plus/refs/heads/main/assist/memo/gisou/chapcha.html',
+        'https://raw.githubusercontent.com/woolisbest-honke/min-wlyt-plus/refs/heads/main/assist/memo/gisou/easy.html',
         'https://raw.githubusercontent.com/woolisbest-honke/min-wlyt-plus/refs/heads/main/gizo/Login.html',
         'https://github.com/woolisbest-honke/min-wlyt-plus/raw/refs/heads/main/gizo/TU.html',
         'https://github.com/woolisbest-honke/min-wlyt-plus/raw/refs/heads/main/gizo/classroom.html',
@@ -2079,7 +2079,7 @@ app.get('/stream/inv/:videoId', async (req, res) => {
     const randomUA = userAgents[Math.floor(Math.random() * userAgents.length)];
     
     try {
-        const configRes = await fetch("https://raw.githubusercontent.com/mino-hobby-pro/min-tube-pro-local-txt/refs/heads/main/inv-check.txt");
+        const configRes = await fetch("https://raw.githubusercontent.com/woolisbest-honke/min-wlyt-plus/refs/heads/main/assist/inv-check.txt");
         const extraParams = (await configRes.text()).trim(); 
         
         const targetUrl = `https://yt-comp5.chocolatemoo53.com/companion/latest_version?id=${videoId}${extraParams}`;
