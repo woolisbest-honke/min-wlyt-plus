@@ -1,6 +1,6 @@
 {
   "name": "min-wlyt-plus",
-  "version": "1.0.0",
+  "version": "1.0.3",
   "description": "min-wlyt-plus is smart youtube watcher",
   "main": "index.js",
   "scripts": {
@@ -14,7 +14,7 @@
     "nodejs"
   ],
   "author": "mino woolisbest",
-  "license": "MIT",
+  "license": "WNCCL-PN",
   "dependencies": {
     "express": "^4.18.2",
     "cookie-parser": "^1.4.6",
