@@ -1577,6 +1577,10 @@ app.get("/sw.js", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "sw.js"));
 });
 
+app.get("/wool", (req, res) => {
+  res.sendFile(path.join(__dirname, ("public", "wista.html"));
+});
+
 app.get("/api/channel", async (req, res) => {
   const channelName = req.query.name || req.query.id;
   const page = parseInt(req.query.page) || 0;
@@ -2380,7 +2384,7 @@ app.get("/api/1-search", async (req, res, next) => {
 });
 
 /**
- * PROXY_DIR/
+ * proxy/
  * ├── uv/ (sw.js, uv.bundle.js, etc.)
  * └── prxy/
  *     ├── baremux/ (index.js, worker.js, etc.)
